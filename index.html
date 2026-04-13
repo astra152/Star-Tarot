@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LUMINA · 星辰塔罗</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            gold: '#C9A962',
+            'gold-light': '#E8D5A3',
+            'gold-dark': '#8B7355',
+            purple: '#2D1B4E',
+            'purple-dark': '#1A0F2E',
+            'purple-light': '#4A2C7A'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow-x: hidden; background: linear-gradient(180deg, #0D0D1A 0%, #1A0F2E 50%, #0D0D1A 100%); color: #fff; min-height: 100vh; font-family: 'Cinzel', serif; }
+    #cosmos { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+    .nebula { position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.4; animation: nebula-drift 20s infinite alternate ease-in-out; }
+    @keyframes nebula-drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(30px, -30px) scale(1.1); } }
+    #tarot-circle { position: relative; width: 520px; height: 520px; margin: 0 auto; }
+    #circle-inner { position: absolute; width: 100%; height: 100%; transition: none; }
+    .tarot-card { position: absolute; width: 75px; height: 125px; border-radius: 8px; cursor: pointer; transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.3s; overflow: hidden; background: linear-gradient(145deg, #1A0F2E 0%, #2D1B4E 50%, #1A0F2E 100%); border: 2px solid transparent; background-clip: padding-box; box-shadow: 0 0 20px rgba(201, 169, 98, 0.1); }
+    .tarot-card::before { content: ''; position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px; background: linear-gradient(145deg, #C9A962, #8B7355, #C9A962, #8B7355); border-radius: 10px; z-index: -1; opacity: 0.6; transition: opacity 0.3s; }
+    .tarot-card:hover::before, .tarot-card.hover::before { opacity: 1; }
+    .tarot-card:hover, .tarot-card.hover { transform: scale(1.2) !important; z-index: 100 !important; box-shadow: 0 0 40px rgba(201, 169, 98, 0.5); }
+    .tarot-card.selected { border-color: #C9A962; box-shadow: 0 0 50px rgba(201, 169, 98, 0.7); }
+    .tarot-card.selected::before { opacity: 1; animation: gold-pulse 2s infinite; }
+    @keyframes gold-pulse { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; } }
+    .tarot-card img { width: 100%; height: 100%; object-fit: cover; }
+    .card-back { width: 100%; height: 100%; background: radial-gradient(circle at center, rgba(201, 169, 98, 0.1) 0%, transparent 70%), linear-gradient(145deg, #1A0F2E 0%, #2D1B4E 50%, #1A0F2E 100%); display: flex; align-items: center; justify-content: center; position: relative; }
+    .card-back::before { content: '✧'; font-size: 28px; color: rgba(201, 169, 98, 0.4); animation: symbol-pulse 3s infinite ease-in-out; }
+    .card-back::after { content: ''; position: absolute; top: 8px; left: 8px; right: 8px; bottom: 8px; border: 1px solid rgba(201, 169, 98, 0.2); border-radius: 4px; }
+    @keyframes symbol-pulse { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
+    #cursor { position: fixed; width: 50px; height: 50px; border-radius: 50%; background: radial-gradient(circle, rgba(201, 169, 98, 0.3) 0%, transparent 70%); border: 2px solid rgba(201, 169, 98, 0.6); pointer-events: none; transform: translate(-50%, -50%); z-index: 9999; display: none; transition: width 0.2s, height 0.2s; box-shadow: 0 0 20px rgba(201, 169, 98, 0.3); }
+    #cursor.active { width: 70px; height: 70px; background: radial-gradient(circle, rgba(201, 169, 98, 0.5) 0%, transparent 70%); border-color: rgba(201, 169, 98, 0.9); box-shadow: 0 0 40px rgba(201, 169, 98, 0.5); }
+    #cursor::after { content: ''; position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: #C9A962; border-radius: 50%; transform: translate(-50%, -50%); }
+    .result-card { background: linear-gradient(145deg, rgba(26, 15, 46, 0.9) 0%, rgba(45, 27, 78, 0.9) 100%); border: 1px solid rgba(201, 169, 98, 0.3); border-radius: 16px; position: relative; overflow: hidden; }
+    .result-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(201, 169, 98, 0.5), transparent); }
+    .glass-panel { background: linear-gradient(145deg, rgba(26, 15, 46, 0.8) 0%, rgba(45, 27, 78, 0.6) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(201, 169, 98, 0.2); border-radius: 20px; position: relative; }
+    .glass-panel::before { content: ''; position: absolute; top: 0; left: 20%; right: 20%; height: 1px; background: linear-gradient(90deg, transparent, rgba(201, 169, 98, 0.4), transparent); }
+    #gesture-indicator { position: fixed; top: 20px; right: 20px; padding: 12px 24px; background: linear-gradient(145deg, rgba(26, 15, 46, 0.9) 0%, rgba(45, 27, 78, 0.9) 100%); border: 1px solid rgba(201, 169, 98, 0.3); border-radius: 30px; font-size: 13px; z-index: 1000; backdrop-filter: blur(10px); }
+    #camera-preview { position: fixed; bottom: 20px; right: 20px; width: 180px; height: 135px; border-radius: 12px; overflow: hidden; z-index: 1000; border: 1px solid rgba(201, 169, 98, 0.3); background: rgba(26, 15, 46, 0.8); box-shadow: 0 0 30px rgba(0, 0, 0, 0.5); }
+    #camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.9; }
+    #camera-preview.hidden { display: none; }
+    .mobile-hint { display: none; }
+    @media (max-width: 768px) {
+      #tarot-circle { width: 340px; height: 340px; }
+      .tarot-card { width: 50px; height: 83px; }
+      #camera-preview { width: 100px; height: 75px; bottom: 80px; }
+      #gesture-indicator { font-size: 11px; padding: 8px 16px; }
+      .mobile-hint { display: block; }
+    }
+    #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, #0D0D1A 0%, #1A0F2E 50%, #0D0D1A 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: opacity 0.8s; }
+    .loading-ring { width: 100px; height: 100px; border: 2px solid rgba(201, 169, 98, 0.1); border-top-color: #C9A962; border-radius: 50%; animation: spin 1.5s linear infinite; position: relative; }
+    .loading-ring::before { content: '✧'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 24px; color: #C9A962; animation: symbol-pulse 2s infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #chat-messages::-webkit-scrollbar { width: 6px; }
+    #chat-messages::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 3px; }
+    #chat-messages::-webkit-scrollbar-thumb { background: rgba(201, 169, 98, 0.3); border-radius: 3px; }
+    #chat-messages::-webkit-scrollbar-thumb:hover { background: rgba(201, 169, 98, 0.5); }
+    #tutorial { background: linear-gradient(180deg, rgba(13, 13, 26, 0.95) 0%, rgba(26, 15, 46, 0.95) 100%); border-top: 1px solid rgba(201, 169, 98, 0.2); }
+    .tutorial-step { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-bottom: 1px solid rgba(201, 169, 98, 0.1); }
+    .step-icon { width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(145deg, rgba(201, 169, 98, 0.15) 0%, rgba(74, 44, 122, 0.15) 100%); border: 1px solid rgba(201, 169, 98, 0.3); display: flex; align-items: center; justify-content: center; font-size: 20px; color: #C9A962; flex-shrink: 0; }
+    @keyframes card-reveal { 0% { transform: translateY(80px) rotateY(180deg) scale(0.8); opacity: 0; } 100% { transform: translateY(0) rotateY(0) scale(1); opacity: 1; } }
+    .result-card { animation: card-reveal 0.8s ease-out forwards; opacity: 0; }
+    @keyframes tag-pop { 0% { transform: scale(0); opacity: 0; } 70% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+    .keyword-tag { animation: tag-pop 0.4s ease-out forwards; opacity: 0; }
+    @media (max-width: 768px) { #tarot-circle { width: 340px; height: 340px; } .tarot-card { width: 50px; height: 83px; } #camera-preview { width: 120px; height: 90px; } }
+  </style>
+</head>
+
+<body>
+  <div id="loading">
+    <div class="loading-ring"></div>
+    <p class="mt-8 text-gold/80 text-lg tracking-widest">LUMINA</p>
+    <p class="mt-3 text-white/40 text-sm tracking-wider">星辰感应连接中...</p>
+  </div>
+
+  <div id="cosmos">
+    <canvas id="stars-canvas"></canvas>
+    <div class="nebula" style="width:500px;height:500px;background:radial-gradient(circle,rgba(74,44,122,0.4),transparent);top:5%;left:5%;"></div>
+    <div class="nebula" style="width:600px;height:600px;background:radial-gradient(circle,rgba(201,169,98,0.15),transparent);top:40%;right:-10%;animation-delay:-7s;"></div>
+    <div class="nebula" style="width:400px;height:400px;background:radial-gradient(circle,rgba(45,27,78,0.5),transparent);bottom:5%;left:20%;animation-delay:-14s;"></div>
+  </div>
+
+  <div id="cursor"></div>
+
+  <div id="gesture-indicator">
+    <i class="fa-solid fa-hand-sparkles mr-2 text-gold"></i>
+    <span id="gesture-text" class="text-white/80">等待手势...</span>
+  </div>
+
+  <div id="camera-preview">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="hand-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+  </div>
+
+  <div class="container mx-auto px-4 py-8 relative z-10">
+    <div class="text-center mb-10">
+      <h1 class="text-4xl md:text-5xl font-light text-white tracking-[0.4em] mb-4" style="text-shadow: 0 0 40px rgba(201,169,98,0.3);">LUMINA</h1>
+      <p class="text-gold/70 text-base tracking-[0.3em] font-light">星辰感应塔罗</p>
+    </div>
+
+    <div class="text-center mb-6">
+      <p class="text-white/50 text-sm tracking-wider">
+        <span id="status-text">张开手掌转动 · 握拳停止 · 食指指向选牌</span>
+      </p>
+      <p class="text-white/30 text-xs mt-1 mobile-hint">手机端可直接点击牌面选牌</p>
+    </div>
+
+    <div id="tarot-circle" class="mb-8 mx-auto">
+      <div id="circle-inner"></div>
+    </div>
+
+    <div id="selected-cards" class="hidden flex justify-center gap-8 mb-10 flex-wrap px-4"></div>
+
+    <div id="reading" class="hidden max-w-3xl mx-auto glass-panel p-8 mb-8">
+      <h2 class="text-gold text-xl mb-6 text-center tracking-[0.2em] font-light">命运启示</h2>
+      <div id="keywords" class="flex flex-wrap gap-3 justify-center mb-6"></div>
+      <div id="full-reading" class="text-white/85 leading-relaxed text-base space-y-4"></div>
+    </div>
+
+    <div id="chat" class="hidden max-w-2xl mx-auto glass-panel overflow-hidden">
+      <div class="px-6 py-4 border-b border-gold/20">
+        <h3 class="text-gold text-base tracking-wider flex items-center justify-center gap-2">
+          <i class="fa-solid fa-comments"></i>深入探索
+        </h3>
+      </div>
+      <div id="chat-messages" class="h-[400px] overflow-y-auto p-4 space-y-4 scrollbar-thin"></div>
+      <div class="px-4 py-4 border-t border-gold/10 bg-black/20">
+        <div class="flex gap-3">
+          <input type="text" id="question" placeholder="输入你的问题..." class="flex-1 bg-black/40 border border-gold/20 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-gold/50 transition-all placeholder-white/30" onkeypress="if(event.key==='Enter')sendMessage()">
+          <button onclick="sendMessage()" id="send-btn" class="px-6 py-3 bg-gradient-to-r from-gold/20 to-purple/20 hover:from-gold/30 hover:to-purple/30 text-gold rounded-xl transition-all border border-gold/20 disabled:opacity-50">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center mt-10">
+      <button onclick="restart()" class="px-10 py-3 bg-gradient-to-r from-purple-dark/30 to-purple/30 hover:from-purple/40 hover:to-purple-light/40 rounded-full text-gold transition-all border border-gold/30 tracking-wider">
+        <i class="fa-solid fa-rotate-right mr-2"></i>重新占卜
+      </button>
+    </div>
+  </div>
+
+  <div id="tutorial" class="fixed bottom-0 left-0 right-0 z-50">
+    <div class="container mx-auto">
+      <div class="flex justify-between items-center px-5 py-3 border-b border-gold/10">
+        <h3 class="text-gold text-sm tracking-wider"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>操作指南</h3>
+        <button onclick="toggleTutorial()" class="text-white/40 hover:text-gold transition-colors">
+          <i class="fa-solid fa-chevron-up" id="tutorial-toggle"></i>
+        </button>
+      </div>
+      <div id="tutorial-content" class="max-h-0 overflow-hidden transition-all duration-500">
+        <div class="tutorial-step"><div class="step-icon"><i class="fa-solid fa-hand"></i></div><div><h4 class="text-white text-sm font-medium mb-1">张开手掌</h4><p class="text-white/40 text-xs">牌阵开始旋转，命运之轮转动</p></div></div>
+        <div class="tutorial-step"><div class="step-icon"><i class="fa-solid fa-fist-raised"></i></div><div><h4 class="text-white text-sm font-medium mb-1">握紧拳头</h4><p class="text-white/40 text-xs">牌阵停止，准备选牌</p></div></div>
+        <div class="tutorial-step"><div class="step-icon"><i class="fa-solid fa-hand-point-up"></i></div><div><h4 class="text-white text-sm font-medium mb-1">食指指向牌面</h4><p class="text-white/40 text-xs">悬停1秒自动选牌，重复三次</p></div></div>
+        <div class="tutorial-step border-b-0"><div class="step-icon"><i class="fa-solid fa-mouse-pointer"></i></div><div><h4 class="text-white text-sm font-medium mb-1">鼠标点击</h4><p class="text-white/40 text-xs">没有摄像头？点击牌面即可选牌</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===================== 配置项 =====================
+    const YUANQI_API_KEY = "ntW6u0edO25ynVVx4EWyIM4BvCbnN6Wa";
+    const YUANQI_ASSISTANT_ID = "2042175725104006208";
+    const YUANQI_API_URL = "https://yuanqi.tencent.com/openapi/v1/agent/chat/completions";
+    
+    // ===================== 塔罗牌数据 =====================
+    const tarotCards = [
+      { name: "愚者", en: "The Fool", img: "m00.jpg", keywords: ["自由", "开始", "冒险"], meaning: "新的起点，无畏冒险。愚者代表无限可能性和纯净的开始，鼓励你勇敢踏出第一步。" },
+      { name: "魔术师", en: "The Magician", img: "m01.jpg", keywords: ["创造", "行动", "掌控"], meaning: "掌控能力，开启计划。魔术师象征着你拥有实现目标所需的一切资源和能力。" },
+      { name: "女祭司", en: "The High Priestess", img: "m02.jpg", keywords: ["智慧", "直觉", "神秘"], meaning: "内心洞察，静默思考。女祭司提醒你倾听内心的声音，答案就在潜意识中。" },
+      { name: "皇后", en: "The Empress", img: "m03.jpg", keywords: ["丰收", "温柔", "创造"], meaning: "滋养成长，物质丰盈。皇后象征着丰盛、创造力和母性的关怀。" },
+      { name: "皇帝", en: "The Emperor", img: "m04.jpg", keywords: ["权威", "秩序", "稳定"], meaning: "秩序规则，坚定领导。皇帝代表着结构、权威和保护的力量。" },
+      { name: "教皇", en: "The Hierophant", img: "m05.jpg", keywords: ["指引", "传统", "信仰"], meaning: "精神信仰，获得助力。教皇象征着精神指引和传统的智慧。" },
+      { name: "恋人", en: "The Lovers", img: "m06.jpg", keywords: ["爱情", "选择", "和谐"], meaning: "心灵契合，重要抉择。恋人代表着爱情、价值观的选择和人际关系的和谐。" },
+      { name: "战车", en: "The Chariot", img: "m07.jpg", keywords: ["胜利", "意志", "决心"], meaning: "克服阻碍，勇往直前。战车象征着意志力和决心带来的胜利。" },
+      { name: "力量", en: "Strength", img: "m08.jpg", keywords: ["勇气", "耐心", "内在力量"], meaning: "内心强大，包容坚韧。力量牌提醒你真正的力量来自内心的平静和坚持。" },
+      { name: "隐者", en: "The Hermit", img: "m09.jpg", keywords: ["独处", "反思", "智慧"], meaning: "自我反思，寻找真相。隐者代表着内省和寻求内在的智慧之光。" },
+      { name: "命运之轮", en: "Wheel of Fortune", img: "m10.jpg", keywords: ["转折", "机遇", "变化"], meaning: "时来运转，变化降临。命运之轮提醒你生命是循环的，把握机遇。" },
+      { name: "正义", en: "Justice", img: "m11.jpg", keywords: ["公平", "因果", "抉择"], meaning: "理性判断，因果平衡。正义牌象征着公正的决定和因果法则。" },
+      { name: "倒吊人", en: "The Hanged Man", img: "m12.jpg", keywords: ["牺牲", "等待", "新视角"], meaning: "换个视角，暂停沉淀。倒吊人提醒你有时候放下才能获得新的洞见。" },
+      { name: "死神", en: "Death", img: "m13.jpg", keywords: ["结束", "新生", "转变"], meaning: "彻底转变，告别过去。死神牌象征着一个阶段的结束和新生的开始。" },
+      { name: "节制", en: "Temperance", img: "m14.jpg", keywords: ["平衡", "耐心", "调和"], meaning: "调和适度，稳步前行。节制牌提醒你保持平衡，耐心等待事物成熟。" },
+      { name: "恶魔", en: "The Devil", img: "m15.jpg", keywords: ["束缚", "欲望", "觉醒"], meaning: "物质执念，突破局限。恶魔牌提醒你审视那些束缚你的枷锁。" },
+      { name: "高塔", en: "The Tower", img: "m16.jpg", keywords: ["颠覆", "觉醒", "解放"], meaning: "突发巨变，打破旧状。高塔代表着必要的破坏，为重建创造空间。" },
+      { name: "星星", en: "The Star", img: "m17.jpg", keywords: ["希望", "治愈", "灵感"], meaning: "美好愿景，心灵治愈。星星牌带来希望和内心的平静。" },
+      { name: "月亮", en: "The Moon", img: "m18.jpg", keywords: ["不安", "潜意识", "幻象"], meaning: "直面恐惧，清晰认知。月亮牌提醒你穿越幻象，找到真相。" },
+      { name: "太阳", en: "The Sun", img: "m19.jpg", keywords: ["快乐", "成功", "光明"], meaning: "光明温暖，满心喜悦。太阳牌象征着成功、快乐和积极的生命能量。" },
+      { name: "审判", en: "Judgement", img: "m20.jpg", keywords: ["觉醒", "重生", "召唤"], meaning: "自我觉醒，全新阶段。审判牌代表着精神的觉醒和新的开始。" },
+      { name: "世界", en: "The World", img: "m21.jpg", keywords: ["完成", "圆满", "成就"], meaning: "达成目标，完美收官。世界牌象征着旅程的完成和生命的圆满。" }
+    ];
+
+    // ===================== 全局变量 =====================
+    let selectedCards = [];
+    let cardPositions = {};
+    let chatHistory = [];
+    let isLoading = false;
+    let currentRotation = 0;
+    let isRotating = false;
+    let rotationSpeed = 0;
+    let animationId = null;
+    let gestureState = 'waiting';
+    let lastGestureTime = 0;
+    let pointingCard = null;
+    let pointingTimer = null;
+    let hands = null;
+    let camera = null;
+
+    const circle = document.getElementById('tarot-circle');
+    const circleInner = document.getElementById('circle-inner');
+    const cursor = document.getElementById('cursor');
+    const gestureText = document.getElementById('gesture-text');
+    const statusText = document.getElementById('status-text');
+    const loading = document.getElementById('loading');
+    const positions = ['过去', '现在', '未来'];
+
+    // ===================== 1. 星空背景 =====================
+    const starsCanvas = document.getElementById('stars-canvas');
+    const starsCtx = starsCanvas.getContext('2d');
+    function resizeCanvas() { starsCanvas.width = window.innerWidth; starsCanvas.height = window.innerHeight; }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    class Star { constructor() { this.reset(); } reset() { this.x = Math.random() * starsCanvas.width; this.y = Math.random() * starsCanvas.height; this.size = Math.random() * 1.5 + 0.5; this.speed = Math.random() * 0.2 + 0.05; this.brightness = Math.random(); this.twinkleSpeed = Math.random() * 0.015 + 0.005; } draw() { const alpha = 0.4 + Math.sin(Date.now() * this.twinkleSpeed) * 0.3; starsCtx.fillStyle = `rgba(255,255,255,${alpha * this.brightness})`; starsCtx.beginPath(); starsCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2); starsCtx.fill(); } update() { this.y += this.speed; if (this.y > starsCanvas.height) { this.y = 0; this.x = Math.random() * starsCanvas.width; } } }
+    const stars = Array(150).fill().map(() => new Star());
+    function animateStars() { starsCtx.clearRect(0, 0, starsCanvas.width, starsCanvas.height); stars.forEach(s => { s.update(); s.draw(); }); requestAnimationFrame(animateStars); }
+    animateStars();
+
+    // ===================== 2. 生成牌阵 =====================
+    function renderCircle() {
+      circleInner.innerHTML = '';
+      const cardCount = tarotCards.length;
+      const radius = window.innerWidth < 768 ? 115 : 190;
+      tarotCards.forEach((card, index) => {
+        const angle = (360 / cardCount) * index - 90;
+        const radian = (angle * Math.PI) / 180;
+        const x = Math.cos(radian) * radius;
+        const y = Math.sin(radian) * radius;
+        const cardEl = document.createElement('div');
+        cardEl.className = 'tarot-card';
+        cardEl.dataset.index = index;
+        cardEl.style.left = `calc(50% + ${x}px - 37.5px)`;
+        cardEl.style.top = `calc(50% + ${y}px - 62.5px)`;
+        cardEl.innerHTML = `<div class="card-back"></div>`;
+        cardEl.onclick = () => selectCard(index);
+        cardEl.ontouchstart = (e) => { e.preventDefault(); selectCard(index); };
+        circleInner.appendChild(cardEl);
+      });
+    }
+
+    // ===================== 3. MediaPipe Hands =====================
+    async function initHandTracking() {
+      const video = document.getElementById('video');
+      const handCanvas = document.getElementById('hand-canvas');
+      const handCtx = handCanvas.getContext('2d');
+      // 检测iOS
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+      // iOS用较低复杂度模型
+      hands.setOptions({ 
+        maxNumHands: 1, 
+        modelComplexity: isIOS ? 0 : 1, 
+        minDetectionConfidence: 0.5, 
+        minTrackingConfidence: 0.5 
+      });
+      hands.onResults((results) => {
+        handCanvas.width = handCanvas.offsetWidth;
+        handCanvas.height = handCanvas.offsetHeight;
+        handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          const landmarks = results.multiHandLandmarks[0];
+          // 绘制手部关键点
+          handCtx.fillStyle = 'rgba(201, 169, 98, 0.8)';
+          landmarks.forEach(point => { 
+            handCtx.beginPath(); 
+            handCtx.arc((1 - point.x) * handCanvas.width, point.y * handCanvas.height, 4, 0, Math.PI * 2); 
+            handCtx.fill(); 
+          });
+          const palmX = (1 - landmarks[9].x) * window.innerWidth;
+          const palmY = landmarks[9].y * window.innerHeight;
+          cursor.style.display = 'block';
+          cursor.style.left = palmX + 'px';
+          cursor.style.top = palmY + 'px';
+          const gesture = detectGesture(landmarks);
+          // 显示识别到的手势
+          gestureText.textContent = `检测到: ${gesture === 'open' ? '张开' : gesture === 'closed' ? '握拳' : gesture === 'point' ? '指向' : '识别中...'}`;
+          handleGesture(gesture, palmX, palmY, landmarks);
+        } else {
+          cursor.style.display = 'none';
+          clearPointingTimer();
+          if (Date.now() - lastGestureTime > 500) { 
+            gestureState = 'waiting'; 
+            gestureText.textContent = '请把手放入画面'; 
+            cursor.classList.remove('active'); 
+          }
+        }
+      });
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+        video.srcObject = stream;
+        camera = new Camera(video, { onFrame: async () => { await hands.send({ image: video }); }, width: 640, height: 480 });
+        camera.start();
+        loading.style.opacity = '0';
+        setTimeout(() => loading.style.display = 'none', 800);
+      } catch (err) {
+        console.log('摄像头未启用:', err);
+        loading.innerHTML = `<p class="text-gold/80 text-lg mb-2 tracking-wider">摄像头未启用</p><p class="text-white/40 text-sm">您可以使用鼠标点击选牌</p>`;
+        setTimeout(() => { loading.style.opacity = '0'; setTimeout(() => loading.style.display = 'none', 800); }, 2000);
+      }
+    }
+
+    // ===================== 4. 手势检测 =====================
+    function detectGesture(landmarks) {
+      // 获取关键点 - 使用距离判断更可靠
+      const wrist = landmarks[0];
+      const indexTip = landmarks[8];
+      const indexPIP = landmarks[6];
+      const middleTip = landmarks[12];
+      const middlePIP = landmarks[10];
+      const ringTip = landmarks[16];
+      const ringPIP = landmarks[14];
+      const pinkyTip = landmarks[20];
+      const pinkyPIP = landmarks[18];
+      
+      // 计算手指是否伸展（指尖到手腕距离 > 关节到手腕距离）
+      const dist = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+      
+      const indexExtended = dist(indexTip, wrist) > dist(indexPIP, wrist) * 1.1;
+      const middleExtended = dist(middleTip, wrist) > dist(middlePIP, wrist) * 1.1;
+      const ringExtended = dist(ringTip, wrist) > dist(ringPIP, wrist) * 1.1;
+      const pinkyExtended = dist(pinkyTip, wrist) > dist(pinkyPIP, wrist) * 1.1;
+      
+      // 张开手掌：所有手指伸展
+      if (indexExtended && middleExtended && ringExtended && pinkyExtended) return 'open';
+      // 握拳：所有手指弯曲
+      if (!indexExtended && !middleExtended && !ringExtended && !pinkyExtended) return 'closed';
+      // 指向：只有食指伸展
+      if (indexExtended && !middleExtended && !ringExtended && !pinkyExtended) return 'point';
+      
+      return 'unknown';
+    }
+
+    function handleGesture(gesture, palmX, palmY, landmarks) {
+      const now = Date.now();
+      if (gesture === 'open') {
+        if (gestureState !== 'open') { gestureState = 'open'; gestureText.textContent = '张开手掌 · 牌阵旋转'; cursor.classList.add('active'); startRotation(); updateStatus('牌阵旋转中...握拳停止'); }
+        clearPointingTimer();
+      } else if (gesture === 'closed') {
+        if (gestureState === 'open' || gestureState === 'point') { gestureState = 'closed'; gestureText.textContent = '握拳 · 牌阵停止'; cursor.classList.remove('active'); stopRotation(); updateStatus('牌阵已停止，伸出食指选牌'); }
+        clearPointingTimer();
+      } else if (gesture === 'point') {
+        if (gestureState !== 'point') { gestureState = 'point'; gestureText.textContent = '食指指向 · 悬停选牌'; }
+        const fingerX = (1 - landmarks[8].x) * window.innerWidth;
+        const fingerY = landmarks[8].y * window.innerHeight;
+        cursor.style.left = fingerX + 'px';
+        cursor.style.top = fingerY + 'px';
+        const cardEl = document.elementFromPoint(fingerX, fingerY);
+        if (cardEl && cardEl.closest('.tarot-card')) {
+          const tarotCard = cardEl.closest('.tarot-card');
+          const index = parseInt(tarotCard.dataset.index);
+          document.querySelectorAll('.tarot-card.hover').forEach(c => c.classList.remove('hover'));
+          tarotCard.classList.add('hover');
+          if (pointingCard !== index) { clearPointingTimer(); pointingCard = index; pointingTimer = setTimeout(() => { if (gestureState === 'point' && pointingCard === index) { selectCard(index); clearPointingTimer(); } }, 800); }
+        } else { document.querySelectorAll('.tarot-card.hover').forEach(c => c.classList.remove('hover')); clearPointingTimer(); }
+      }
+      lastGestureTime = now;
+    }
+
+    function clearPointingTimer() { if (pointingTimer) { clearTimeout(pointingTimer); pointingTimer = null; } pointingCard = null; document.querySelectorAll('.tarot-card.hover').forEach(c => c.classList.remove('hover')); }
+
+    // ===================== 5. 牌阵旋转 =====================
+    function startRotation() { if (isRotating) return; isRotating = true; rotationSpeed = 3; function animate() { if (!isRotating) return; const targetSpeed = 4; rotationSpeed += (targetSpeed - rotationSpeed) * 0.1; currentRotation += rotationSpeed; circleInner.style.transform = `rotate(${currentRotation}deg)`; animationId = requestAnimationFrame(animate); } animate(); }
+    function stopRotation() { isRotating = false; if (animationId) { cancelAnimationFrame(animationId); animationId = null; } }
+
+    // ===================== 6. 选牌 =====================
+    function selectCard(index) {
+      if (selectedCards.length >= 3) return;
+      if (selectedCards.includes(index)) return;
+      selectedCards.push(index);
+      clearPointingTimer();
+      cardPositions[index] = Math.random() > 0.5 ? 'upright' : 'reversed';
+      const cardEl = document.querySelectorAll('.tarot-card')[index];
+      cardEl.classList.add('selected');
+      cardEl.classList.remove('hover');
+      const card = tarotCards[index];
+      const rotation = cardPositions[index] === 'reversed' ? 'transform: scaleY(-1);' : '';
+      cardEl.innerHTML = `<img src="cards/${card.img}" alt="${card.name}" style="${rotation}">`;
+      cardEl.style.transform = 'scale(1.3) translateY(-30px)';
+      setTimeout(() => { cardEl.style.transform = ''; }, 400);
+      if (selectedCards.length === 3) { setTimeout(showResult, 600); } else { updateStatus(`已选择 ${selectedCards.length}/3 张牌`); }
+    }
+
+    // ===================== 7. 展示结果 =====================
+    function showResult() {
+      stopRotation();
+      circle.style.opacity = '0';
+      circle.style.transform = 'scale(0.8)';
+      setTimeout(() => {
+        circle.classList.add('hidden');
+        const container = document.getElementById('selected-cards');
+        const keywordsEl = document.getElementById('keywords');
+        const readingEl = document.getElementById('full-reading');
+        container.classList.remove('hidden');
+        document.getElementById('reading').classList.remove('hidden');
+        document.getElementById('chat').classList.remove('hidden');
+        let allKeywords = [];
+        let html = '';
+        selectedCards.forEach((idx, i) => {
+          const card = tarotCards[idx];
+          const position = cardPositions[idx];
+          const isReversed = position === 'reversed';
+          const positionText = isReversed ? '逆位' : '正位';
+          const positionClass = isReversed ? 'text-purple-400' : 'text-gold';
+          allKeywords.push(...card.keywords);
+          html += `<div class="result-card p-5 w-[180px] text-center" style="animation-delay: ${i * 0.15}s"><p class="text-gold text-xs mb-3 tracking-[0.2em]">${positions[i]}</p><div class="relative"><img src="cards/${card.img}" alt="${card.name}" class="w-full h-[250px] object-cover rounded-lg mb-3" style="box-shadow: 0 0 30px rgba(201,169,98,0.2); ${isReversed ? 'transform: rotate(180deg);' : ''}"></div><h3 class="text-white text-base font-medium mb-1">${card.name}</h3><p class="text-white/30 text-xs mb-1">${card.en}</p><p class="${positionClass} text-xs tracking-wider">${positionText}</p></div>`;
+        });
+        container.innerHTML = html;
+        keywordsEl.innerHTML = allKeywords.map((k, i) => `<span class="keyword-tag px-4 py-1.5 bg-gold/10 text-gold rounded-full text-xs border border-gold/20" style="animation-delay: ${i * 0.08}s">${k}</span>`).join('');
+        readingEl.innerHTML = selectedCards.map((idx, i) => {
+          const position = cardPositions[idx];
+          const isReversed = position === 'reversed';
+          const positionText = isReversed ? '逆位' : '正位';
+          const positionClass = isReversed ? 'text-purple-400' : 'text-gold';
+          return `<div class="mb-4"><h4 class="text-gold text-base mb-2 tracking-wider">${positions[i]} · ${tarotCards[idx].name} <span class="${positionClass} text-sm">(${positionText})</span></h4><p class="text-white/70">${tarotCards[idx].meaning}</p></div>`;
+        }).join('');
+        updateStatus('占卜完成 · 探索你的命运启示');
+        chatHistory = [];
+        const chatContainer = document.getElementById('chat-messages');
+        chatContainer.innerHTML = `<div class="flex justify-start"><div class="max-w-[80%] bg-purple-dark/50 border border-purple-light/30 rounded-2xl rounded-tl-sm px-4 py-3"><p class="text-white/90 text-sm leading-relaxed mb-2">你抽到的三张牌：</p><p class="text-gold/80 text-sm">• 过去：${tarotCards[selectedCards[0]].name}（${cardPositions[selectedCards[0]] === 'reversed' ? '逆位' : '正位'}）</p><p class="text-gold/80 text-sm">• 现在：${tarotCards[selectedCards[1]].name}（${cardPositions[selectedCards[1]] === 'reversed' ? '逆位' : '正位'}）</p><p class="text-gold/80 text-sm">• 未来：${tarotCards[selectedCards[2]].name}（${cardPositions[selectedCards[2]] === 'reversed' ? '逆位' : '正位'}）</p><p class="text-white/60 text-xs mt-3">请输入你想深入了解的问题，我将为你解读...</p></div></div>`;
+      }, 500);
+    }
+
+    // ===================== 8. 智能对话（直接调用元器API）=====================
+    async function sendMessage() {
+      const input = document.getElementById('question');
+      const sendBtn = document.getElementById('send-btn');
+      const q = input.value.trim();
+      if (!q || isLoading) return;
+      addMessage('user', q);
+      input.value = '';
+      isLoading = true;
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+      const loadingId = addMessage('loading', '正在感应星辰...');
+      
+      try {
+        const cards = selectedCards.map((idx, i) => ({
+          name: tarotCards[idx].name,
+          position: cardPositions[idx],
+          time_period: positions[i]
+        }));
+        
+        // 构建消息
+        let messages = [];
+        if (chatHistory.length === 0) {
+          const cardsInfo = cards.map(c => `- ${c.time_period}：${c.name}（${c.position === 'reversed' ? '逆位' : '正位'}）`).join('\n');
+          const prompt = `你是一位专业的塔罗牌解读师。用户抽取了三张牌进行占卜：
+
+【牌阵信息】
+${cardsInfo}
+
+【用户问题】
+${q}
+
+请结合塔罗牌的传统含义、正逆位影响，以及三张牌在「过去、现在、未来」时间线上的关联，给出富有洞察力和指引性的解读。`;
+          messages.push({ role: 'user', content: [{ type: 'text', text: prompt }] });
+        } else {
+          chatHistory.forEach(msg => {
+            messages.push({ role: msg.role, content: [{ type: 'text', text: msg.content }] });
+          });
+          messages.push({ role: 'user', content: [{ type: 'text', text: q }] });
+        }
+        
+        const response = await fetch(YUANQI_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Source': 'openapi',
+            'Authorization': `Bearer ${YUANQI_API_KEY}`
+          },
+          body: JSON.stringify({
+            assistant_id: YUANQI_ASSISTANT_ID,
+            user_id: 'user_' + Date.now(),
+            stream: false,
+            messages: messages
+          })
+        });
+        
+        const data = await response.json();
+        removeMessage(loadingId);
+        
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+          const content = data.choices[0].message.content;
+          const finishReason = data.choices[0].finish_reason;
+          let reply = typeof content === 'string' ? content : content;
+          
+          if (finishReason === 'content_filter') {
+            reply += '\n\n⚠️ 回复被内容安全审核截断，请调整问题后重试';
+          } else if (finishReason === 'sensitive') {
+            reply = '⚠️ 回复内容未通过审核，请调整问题后重试';
+          }
+          
+          addMessage('assistant', reply);
+          chatHistory.push({ role: 'user', content: q });
+          chatHistory.push({ role: 'assistant', content: reply });
+        } else {
+          addMessage('error', '感应失败，请稍后重试');
+        }
+      } catch (error) {
+        console.error('API调用失败:', error);
+        removeMessage(loadingId);
+        addMessage('error', '星辰感应中断，请检查网络后重试');
+      } finally {
+        isLoading = false;
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+      }
+    }
+
+    function addMessage(type, content) {
+      const container = document.getElementById('chat-messages');
+      const id = 'msg-' + Date.now();
+      const msgDiv = document.createElement('div');
+      msgDiv.id = id;
+      if (type === 'user') {
+        msgDiv.className = 'flex justify-end';
+        msgDiv.innerHTML = `<div class="max-w-[80%] bg-gold/20 border border-gold/30 rounded-2xl rounded-tr-sm px-4 py-3"><p class="text-white text-sm leading-relaxed">${escapeHtml(content)}</p></div>`;
+      } else if (type === 'assistant') {
+        msgDiv.className = 'flex justify-start';
+        msgDiv.innerHTML = `<div class="max-w-[80%] bg-purple-dark/50 border border-purple-light/30 rounded-2xl rounded-tl-sm px-4 py-3"><p class="text-white/90 text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}</p></div>`;
+      } else if (type === 'loading') {
+        msgDiv.className = 'flex justify-start';
+        msgDiv.innerHTML = `<div class="max-w-[80%] bg-purple-dark/30 border border-purple-light/20 rounded-2xl rounded-tl-sm px-4 py-3"><p class="text-white/60 text-sm flex items-center gap-2"><i class="fa-solid fa-spinner fa-spin"></i>${escapeHtml(content)}</p></div>`;
+      } else if (type === 'error') {
+        msgDiv.className = 'flex justify-start';
+        msgDiv.innerHTML = `<div class="max-w-[80%] bg-red-900/30 border border-red-500/30 rounded-2xl rounded-tl-sm px-4 py-3"><p class="text-red-300 text-sm flex items-center gap-2"><i class="fa-solid fa-exclamation-triangle"></i>${escapeHtml(content)}</p></div>`;
+      }
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+      return id;
+    }
+
+    function removeMessage(id) { const el = document.getElementById(id); if (el) el.remove(); }
+    function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+    // ===================== 9. 重新占卜 =====================
+    function restart() {
+      selectedCards = [];
+      cardPositions = {};
+      chatHistory = [];
+      currentRotation = 0;
+      circleInner.style.transform = 'rotate(0deg)';
+      document.getElementById('selected-cards').classList.add('hidden');
+      document.getElementById('reading').classList.add('hidden');
+      document.getElementById('chat').classList.add('hidden');
+      circle.classList.remove('hidden');
+      circle.style.opacity = '1';
+      circle.style.transform = 'scale(1)';
+      renderCircle();
+      updateStatus('张开手掌转动 · 握拳停止 · 食指指向选牌');
+    }
+
+    function updateStatus(text) { statusText.textContent = text; }
+    function toggleTutorial() {
+      const content = document.getElementById('tutorial-content');
+      const toggle = document.getElementById('tutorial-toggle');
+      if (content.style.maxHeight) { content.style.maxHeight = null; toggle.style.transform = 'rotate(0deg)'; }
+      else { content.style.maxHeight = content.scrollHeight + 'px'; toggle.style.transform = 'rotate(180deg)'; }
+    }
+
+    // ===================== 初始化 =====================
+    window.onload = () => {
+      renderCircle();
+      initHandTracking();
+      setTimeout(() => {
+        const content = document.getElementById('tutorial-content');
+        const toggle = document.getElementById('tutorial-toggle');
+        content.style.maxHeight = content.scrollHeight + 'px';
+        toggle.style.transform = 'rotate(180deg)';
+      }, 1000);
+    };
+
+    window.addEventListener('resize', () => { if (!circle.classList.contains('hidden')) renderCircle(); });
+  </script>
+</body>
+</html>
